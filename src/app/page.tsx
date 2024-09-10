@@ -13,6 +13,7 @@ interface Message {
   type: 'user' | 'bot'
   content: string
   sources?: { content: string }[]
+  transcription?: string
 }
 
 export default function ResponsiveChatbotWithAudio() {
@@ -40,7 +41,7 @@ export default function ResponsiveChatbotWithAudio() {
     setIsLoading(true)
 
     try {
-      const response = await fetch('/query', {
+      const response = await fetch('http://localhost:8000/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: input }),
@@ -110,7 +111,7 @@ export default function ResponsiveChatbotWithAudio() {
       const formData = new FormData()
       formData.append('audio', audioBlob, 'recording.wav')
 
-      const response = await fetch('/audio', {
+      const response = await fetch('http://localhost:8000/audio', {
         method: 'POST',
         body: formData,
       })
@@ -120,12 +121,14 @@ export default function ResponsiveChatbotWithAudio() {
       }
 
       const data = await response.json()
+      console.log(data)
+      const userMessage: Message = { type: 'user', content: data.transcribed }
       const botMessage: Message = {
         type: 'bot',
         content: data.answer,
         sources: data.sources,
       }
-      setMessages(prev => [...prev, botMessage])
+      setMessages(prev => [...prev, userMessage, botMessage])
     } catch (error) {
       console.error('Error sending audio:', error)
       toast({
@@ -165,7 +168,7 @@ export default function ResponsiveChatbotWithAudio() {
                   }`}
               >
                 {message.content}
-                {message.sources && (
+                {/* {message.sources && (
                   <div className="mt-2 text-xs text-gray-300">
                     <strong>Sources:</strong>
                     <ul className="list-disc list-inside">
@@ -174,7 +177,7 @@ export default function ResponsiveChatbotWithAudio() {
                       ))}
                     </ul>
                   </div>
-                )}
+                )} */}
               </div>
             </div>
           </motion.div>
