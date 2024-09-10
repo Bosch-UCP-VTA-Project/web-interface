@@ -41,7 +41,7 @@ export default function ResponsiveChatbotWithAudio() {
     setIsLoading(true)
 
     try {
-      const response = await fetch('http://localhost:8000/query', {
+      const response = await fetch('https://agenticbosch.onrender.com/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: input }),
@@ -111,7 +111,7 @@ export default function ResponsiveChatbotWithAudio() {
       const formData = new FormData()
       formData.append('audio', audioBlob, 'recording.wav')
 
-      const response = await fetch('http://localhost:8000/audio', {
+      const response = await fetch('https://agenticbosch.onrender.com/audio', {
         method: 'POST',
         body: formData,
       })
