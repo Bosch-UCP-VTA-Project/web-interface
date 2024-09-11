@@ -8,11 +8,11 @@ import { SendHorizontalIcon, Loader2Icon, CarIcon, UserCircle2Icon, MenuIcon, Mi
 import { motion, AnimatePresence } from "framer-motion"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { useToast } from '@/hooks/use-toast'
+import ReactMarkdown from 'react-markdown'
 
 interface Message {
   type: 'user' | 'bot'
   content: string
-  sources?: { content: string }[]
   transcription?: string
 }
 
@@ -41,7 +41,7 @@ export default function ResponsiveChatbotWithAudio() {
     setIsLoading(true)
 
     try {
-      const response = await fetch('https://agenticbosch.onrender.com/query', {
+      const response = await fetch('http://localhost:8000/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: input }),
@@ -55,7 +55,6 @@ export default function ResponsiveChatbotWithAudio() {
       const botMessage: Message = {
         type: 'bot',
         content: data.answer,
-        sources: data.sources,
       }
       setMessages(prev => [...prev, botMessage])
     } catch (error) {
@@ -111,7 +110,7 @@ export default function ResponsiveChatbotWithAudio() {
       const formData = new FormData()
       formData.append('audio', audioBlob, 'recording.wav')
 
-      const response = await fetch('https://agenticbosch.onrender.com/audio', {
+      const response = await fetch('http://localhost:8000/audio', {
         method: 'POST',
         body: formData,
       })
@@ -126,7 +125,6 @@ export default function ResponsiveChatbotWithAudio() {
       const botMessage: Message = {
         type: 'bot',
         content: data.answer,
-        sources: data.sources,
       }
       setMessages(prev => [...prev, userMessage, botMessage])
     } catch (error) {
@@ -140,6 +138,108 @@ export default function ResponsiveChatbotWithAudio() {
       setIsLoading(false)
     }
   }
+
+
+  // const RecordingAnimation = () => (
+  //   <motion.div
+  //     className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50"
+  //     initial={{ opacity: 0 }}
+  //     animate={{ opacity: 1 }}
+  //     exit={{ opacity: 0 }}
+  //   >
+  //     <div className="bg-gray-800 rounded-full p-8">
+  //       <svg width="100" height="100" viewBox="0 0 100 100">
+  //         <motion.circle
+  //           cx="50"
+  //           cy="50"
+  //           r="30"
+  //           stroke="#ef4444"
+  //           strokeWidth="4"
+  //           fill="none"
+  //           initial={{ scale: 0.8, opacity: 0.2 }}
+  //           animate={{
+  //             scale: [0.8, 1.2, 0.8],
+  //             opacity: [0.2, 0.8, 0.2],
+  //           }}
+  //           transition={{
+  //             duration: 1.5,
+  //             repeat: Infinity,
+  //             ease: "easeInOut",
+  //           }}
+  //         />
+  //         <motion.circle
+  //           cx="50"
+  //           cy="50"
+  //           r="15"
+  //           fill="#ef4444"
+  //           initial={{ scale: 1 }}
+  //           animate={{
+  //             scale: [1, 1.1, 1],
+  //           }}
+  //           transition={{
+  //             duration: 1.5,
+  //             repeat: Infinity,
+  //             ease: "easeInOut",
+  //           }}
+  //         />
+  //       </svg>
+  //     </div>
+  //     <div className="absolute bottom-10 text-white text-xl font-semibold">
+  //       Recording...
+  //     </div>
+  //   </motion.div>
+  // )
+
+  const RecordingAnimation = () => (
+    <motion.div
+      className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      style={{ zIndex: 10 }}  // Adjust z-index here
+    >
+      <div className="bg-gray-800 rounded-full p-8">
+        <svg width="100" height="100" viewBox="0 0 100 100">
+          <motion.circle
+            cx="50"
+            cy="50"
+            r="30"
+            stroke="#ef4444"
+            strokeWidth="4"
+            fill="none"
+            initial={{ scale: 0.8, opacity: 0.2 }}
+            animate={{
+              scale: [0.8, 1.2, 0.8],
+              opacity: [0.2, 0.8, 0.2],
+            }}
+            transition={{
+              duration: 1.5,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+          />
+          <motion.circle
+            cx="50"
+            cy="50"
+            r="15"
+            fill="#ef4444"
+            initial={{ scale: 1 }}
+            animate={{
+              scale: [1, 1.1, 1],
+            }}
+            transition={{
+              duration: 1.5,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+          />
+        </svg>
+      </div>
+      <div className="absolute bottom-10 text-white text-xl font-semibold">
+        Recording...
+      </div>
+    </motion.div>
+  )
 
   const renderChatArea = () => (
     <ScrollArea className="flex-grow mb-4 p-4 rounded-lg bg-gray-800/50 backdrop-blur-sm border border-gray-700" ref={scrollAreaRef}>
@@ -167,17 +267,24 @@ export default function ResponsiveChatbotWithAudio() {
                   : 'bg-gray-700 text-gray-100'
                   }`}
               >
-                {message.content}
-                {/* {message.sources && (
-                  <div className="mt-2 text-xs text-gray-300">
-                    <strong>Sources:</strong>
-                    <ul className="list-disc list-inside">
-                      {message.sources.map((source, idx) => (
-                        <li key={idx}>{source.content}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )} */}
+                {message.type === 'user' ? (
+                  message.content
+                ) : (
+                  <ReactMarkdown
+                    components={{
+                      p: ({ node, ...props }) => <p className="mb-2" {...props} />,
+                      h1: ({ node, ...props }) => <h1 className="text-2xl font-bold mb-2" {...props} />,
+                      h2: ({ node, ...props }) => <h2 className="text-xl font-bold mb-2" {...props} />,
+                      h3: ({ node, ...props }) => <h3 className="text-lg font-bold mb-2" {...props} />,
+                      ul: ({ node, ...props }) => <ul className="list-disc list-inside mb-2" {...props} />,
+                      ol: ({ node, ...props }) => <ol className="list-decimal list-inside mb-2" {...props} />,
+                      li: ({ node, ...props }) => <li className="mb-1" {...props} />,
+                      a: ({ node, ...props }) => <a className="text-blue-300 hover:underline" {...props} />,
+                    }}
+                  >
+                    {message.content}
+                  </ReactMarkdown>
+                )}
               </div>
             </div>
           </motion.div>
@@ -236,7 +343,7 @@ export default function ResponsiveChatbotWithAudio() {
             <Button
               type="button"
               onClick={isRecording ? stopRecording : startRecording}
-              className={`bg-gradient-to-r ${isRecording ? 'from-red-500 to-red-600' : 'from-purple-500 to-purple-600'} hover:from-purple-600 hover:to-purple-700 text-white`}
+              className={`bg-gradient-to-r ${isRecording ? 'from-red-500 to-red-600' : 'from-purple-500 to-purple-600'} hover:from-purple-600 hover:to-purple-700 text-white relative z-20`}
             >
               <MicIcon className="w-5 h-5" />
               <span className="sr-only">{isRecording ? 'Stop Recording' : 'Start Recording'}</span>
@@ -256,6 +363,9 @@ export default function ResponsiveChatbotWithAudio() {
           </form>
         </div>
       </main>
+      <AnimatePresence>
+        {isRecording && <RecordingAnimation />}
+      </AnimatePresence>
     </div>
   )
 }
