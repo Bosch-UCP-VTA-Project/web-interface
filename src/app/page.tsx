@@ -41,7 +41,7 @@ export default function ResponsiveChatbotWithAudio() {
     setIsLoading(true)
 
     try {
-      const response = await fetch('http://localhost:8000/query', {
+      const response = await fetch('https://agenticbosch.onrender.com/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: input }),
@@ -110,7 +110,7 @@ export default function ResponsiveChatbotWithAudio() {
       const formData = new FormData()
       formData.append('audio', audioBlob, 'recording.wav')
 
-      const response = await fetch('http://localhost:8000/audio', {
+      const response = await fetch('https://agenticbosch.onrender.com/audio', {
         method: 'POST',
         body: formData,
       })
@@ -138,57 +138,6 @@ export default function ResponsiveChatbotWithAudio() {
       setIsLoading(false)
     }
   }
-
-
-  // const RecordingAnimation = () => (
-  //   <motion.div
-  //     className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50"
-  //     initial={{ opacity: 0 }}
-  //     animate={{ opacity: 1 }}
-  //     exit={{ opacity: 0 }}
-  //   >
-  //     <div className="bg-gray-800 rounded-full p-8">
-  //       <svg width="100" height="100" viewBox="0 0 100 100">
-  //         <motion.circle
-  //           cx="50"
-  //           cy="50"
-  //           r="30"
-  //           stroke="#ef4444"
-  //           strokeWidth="4"
-  //           fill="none"
-  //           initial={{ scale: 0.8, opacity: 0.2 }}
-  //           animate={{
-  //             scale: [0.8, 1.2, 0.8],
-  //             opacity: [0.2, 0.8, 0.2],
-  //           }}
-  //           transition={{
-  //             duration: 1.5,
-  //             repeat: Infinity,
-  //             ease: "easeInOut",
-  //           }}
-  //         />
-  //         <motion.circle
-  //           cx="50"
-  //           cy="50"
-  //           r="15"
-  //           fill="#ef4444"
-  //           initial={{ scale: 1 }}
-  //           animate={{
-  //             scale: [1, 1.1, 1],
-  //           }}
-  //           transition={{
-  //             duration: 1.5,
-  //             repeat: Infinity,
-  //             ease: "easeInOut",
-  //           }}
-  //         />
-  //       </svg>
-  //     </div>
-  //     <div className="absolute bottom-10 text-white text-xl font-semibold">
-  //       Recording...
-  //     </div>
-  //   </motion.div>
-  // )
 
   const RecordingAnimation = () => (
     <motion.div
