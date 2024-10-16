@@ -17,7 +17,6 @@ import {
   XIcon,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import ReactMarkdown from "react-markdown";
 
