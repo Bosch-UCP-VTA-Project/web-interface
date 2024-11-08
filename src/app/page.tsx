@@ -729,7 +729,7 @@ export default function AskBoschChatbot() {
                 information.
               </li>
               <li>
-                Use the 'New chat' button in the sidebar to start a fresh
+                Use the &apos;New chat&apos; button in the sidebar to start a fresh
                 conversation.
               </li>
             </ul>
@@ -748,7 +748,7 @@ export default function AskBoschChatbot() {
             </DialogDescription>
           </DialogHeader>
           <div className="mt-4">
-            <h3 className="text-lg font-semibold mb-2">Do's</h3>
+            <h3 className="text-lg font-semibold mb-2">Do&apos;s</h3>
             <ul className="list-disc list-inside space-y-2">
               <li>
                 Ask questions related to Bosch products, services, and
@@ -761,7 +761,7 @@ export default function AskBoschChatbot() {
                 Report any issues or bugs you encounter while using the chatbot.
               </li>
             </ul>
-            <h3 className="text-lg font-semibold mt-4 mb-2">Don'ts</h3>
+            <h3 className="text-lg font-semibold mt-4 mb-2">Don&apos;ts</h3>
             <ul className="list-disc list-inside space-y-2">
               <li>
                 Do not share personal or sensitive information in your queries.
