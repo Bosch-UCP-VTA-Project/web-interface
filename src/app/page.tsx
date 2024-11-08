@@ -19,11 +19,26 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import ReactMarkdown from "react-markdown";
+import { LoginDialog } from "@/components/login-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface Message {
-  type: "user" | "bot";
+  type: "user" | "assistant";
   content: string;
   transcription?: string;
+}
+
+interface ChatHistory {
+  history: {
+    type: "user" | "assistant";
+    content: string;
+  }[];
 }
 
 export default function AskBoschChatbot() {
@@ -36,7 +51,13 @@ export default function AskBoschChatbot() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false);
   const { toast } = useToast();
+  const [chatHistory, setChatHistory] = useState<ChatHistory[]>([]);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isHelpDialogOpen, setIsHelpDialogOpen] = useState(false);
+  const [isUsageGuidelinesDialogOpen, setIsUsageGuidelinesDialogOpen] =
+    useState(false);
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -44,9 +65,125 @@ export default function AskBoschChatbot() {
     }
   }, [messages]);
 
+  useEffect(() => {
+    const storedSessionId = localStorage.getItem("sessionId");
+    if (storedSessionId) {
+      setSessionId(storedSessionId);
+      setIsLoggedIn(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isLoggedIn && sessionId) {
+      fetchHistory();
+    } else {
+      setChatHistory([]);
+    }
+  }, [isLoggedIn, sessionId]);
+
+  const handleLogin = async (email: string, password: string) => {
+    try {
+      const response = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Login failed");
+      }
+
+      const data = await response.json();
+
+      if (!data.session_id) {
+        throw new Error("No session ID received");
+      }
+
+      localStorage.setItem("sessionId", data.session_id);
+
+      setIsLoggedIn(true);
+      setSessionId(data.session_id);
+
+      toast({
+        title: "Success",
+        description: "You have successfully logged in.",
+        variant: "custom",
+      });
+    } catch (error) {
+      console.error("Login error:", error);
+      throw error;
+    }
+  };
+
+  const fetchHistory = async () => {
+    if (!sessionId) return;
+
+    try {
+      const response = await fetch("https://agenticbosch.onrender.com/history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch history");
+      }
+
+      const data = await response.json();
+      setChatHistory(data.history);
+      console.log("Chat history:", data);
+    } catch (error) {
+      console.error("Error fetching history:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load chat history",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRegister = async (email: string, password: string) => {
+    try {
+      const response = await fetch("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Registration failed");
+      }
+
+      const data = await response.json();
+
+      setIsLoggedIn(true);
+      setSessionId(data.session_id);
+      localStorage.setItem("sessionId", data.session_id);
+
+      toast({
+        title: "Success",
+        description: "You have successfully registered and logged in.",
+        variant: "custom",
+      });
+      console.log("Registered and logged in:", data);
+    } catch (error) {
+      console.error("Registration error:", error);
+      throw error;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
+
+    if (!isLoggedIn || !sessionId) {
+      toast({
+        title: "Log In",
+        description: "Please log in or register to use the chatbot.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const userMessage: Message = { type: "user", content: input };
     setMessages((prev) => [...prev, userMessage]);
@@ -58,7 +195,7 @@ export default function AskBoschChatbot() {
       const response = await fetch("https://agenticbosch.onrender.com/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: input }),
+        body: JSON.stringify({ query: input, session_id: sessionId }),
       });
 
       if (!response.ok) {
@@ -66,15 +203,15 @@ export default function AskBoschChatbot() {
       }
 
       const data = await response.json();
-      const botMessage: Message = {
-        type: "bot",
+      const assistantMessage: Message = {
+        type: "assistant",
         content: data.answer,
       };
-      setMessages((prev) => [...prev, botMessage]);
+      setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
       console.error("Error:", error);
       const errorMessage: Message = {
-        type: "bot",
+        type: "assistant",
         content: "Sorry, I encountered an error while processing your request.",
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -121,10 +258,20 @@ export default function AskBoschChatbot() {
   };
 
   const sendAudioToBackend = async (audioBlob: Blob) => {
+    if (!isLoggedIn || !sessionId) {
+      toast({
+        title: "Log In",
+        description: "Please log in or register to use the chatbot.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
     try {
       const formData = new FormData();
       formData.append("audio", audioBlob, "recording.wav");
+      formData.append("session_id", sessionId!);
 
       const response = await fetch("https://agenticbosch.onrender.com/audio", {
         method: "POST",
@@ -138,11 +285,11 @@ export default function AskBoschChatbot() {
       const data = await response.json();
       console.log(data);
       const userMessage: Message = { type: "user", content: data.transcribed };
-      const botMessage: Message = {
-        type: "bot",
+      const assistantMessage: Message = {
+        type: "assistant",
         content: data.answer,
       };
-      setMessages((prev) => [...prev, userMessage, botMessage]);
+      setMessages((prev) => [...prev, userMessage, assistantMessage]);
     } catch (error) {
       console.error("Error sending audio:", error);
       toast({
@@ -206,6 +353,101 @@ export default function AskBoschChatbot() {
     </motion.div>
   );
 
+  // const renderSidebar = () => (
+  //   <aside
+  //     className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#333333] text-white p-4 transform transition-transform duration-300 ease-in-out ${
+  //       isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+  //     } md:relative md:translate-x-0`}
+  //   >
+  //     <Button
+  //       variant="outline"
+  //       className="w-full justify-start mb-4 text-white"
+  //       onClick={() => setMessages([])}
+  //     >
+  //       <PlusCircle className="mr-2 h-5 w-5" />
+  //       New chat
+  //     </Button>
+  //     {/* <nav className="space-y-2">
+  //       {isLoggedIn ? (
+  //         <>
+  //           {chatHistory.length > 0 ? (
+  //             chatHistory.map((chat, index) => (
+  //               <Button
+  //                 key={index}
+  //                 variant="outline"
+  //                 className="w-full text-white text-wrap p-1"
+  //                 onClick={() => {
+  //                   setMessages(chat.history);
+  //                   setIsSidebarOpen(false);
+  //                 }}
+  //               >
+  //                 {chat.history[0]?.content.substring(0, 30)}...
+  //               </Button>
+  //             ))
+  //           ) : (
+  //             <p className="text-gray-400 text-center text-sm">
+  //               No chat history available
+  //             </p>
+  //           )}
+  //         </>
+  //       ) : (
+  //         <p className="text-gray-400 text-center text-sm">
+  //           Please log in to see your chats.
+  //         </p>
+  //       )}
+  //     </nav> */}
+  //     <nav className="space-y-2">
+  //       {isLoggedIn ? (
+  //         <>
+  //           {chatHistory.length > 0 ? (
+  //             chatHistory.map((chat, index) => (
+  //               <Button
+  //                 key={index}
+  //                 variant="outline"
+  //                 className="w-full text-white text-wrap p-1"
+  //                 onClick={() => {
+  //                   setMessages(chat.history);
+  //                   setIsSidebarOpen(false);
+  //                 }}
+  //               >
+  //                 {chat.history && chat.history[0]
+  //                   ? chat.history[0].content.substring(0, 30) + "..."
+  //                   : "Empty chat"}
+  //               </Button>
+  //             ))
+  //           ) : (
+  //             <p className="text-gray-400 text-center text-sm">
+  //               No chat history available
+  //             </p>
+  //           )}
+  //         </>
+  //       ) : (
+  //         <p className="text-gray-400 text-center text-sm">
+  //           Please log in to see your chats.
+  //         </p>
+  //       )}
+  //     </nav>
+  //     <div className="mt-auto pt-4 border-t border-[#444444] space-y-2">
+  //       <Button
+  //         variant="outline"
+  //         className="w-full justify-start text-white"
+  //         onClick={() => setIsHelpDialogOpen(true)}
+  //       >
+  //         <HelpCircle className="mr-2 h-5 w-5" />
+  //         Help
+  //       </Button>
+  //       <Button
+  //         variant="outline"
+  //         className="w-full justify-start text-white"
+  //         onClick={() => setIsUsageGuidelinesDialogOpen(true)}
+  //       >
+  //         <FileText className="mr-2 h-5 w-5" />
+  //         Usage guidelines
+  //       </Button>
+  //     </div>
+  //   </aside>
+  // );
+
   const renderSidebar = () => (
     <aside
       className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#333333] text-white p-4 transform transition-transform duration-300 ease-in-out ${
@@ -222,21 +464,32 @@ export default function AskBoschChatbot() {
       </Button>
       <nav className="space-y-2">
         {isLoggedIn ? (
-          <>
-            {[
-              "Engaging in Productive Conversations",
-              "Future of Vehicle Diagnostics",
-              "Chat with Assistant",
-            ].map((item, index) => (
-              <Button
-                key={index}
-                variant="outline"
-                className="w-full text-white text-wrap p-1"
-              >
-                {item}
-              </Button>
-            ))}
-          </>
+          // <>
+          //   {chatHistory && chatHistory.length > 0 ? (
+          //     chatHistory.map((chat, index) => (
+          //       <Button
+          //         key={index}
+          //         variant="outline"
+          //         className="w-full text-white text-wrap p-1"
+          //         onClick={() => {
+          //           setMessages(chat.history);
+          //           setIsSidebarOpen(false);
+          //         }}
+          //       >
+          //         {chat.history && chat.history.length > 0
+          //           ? chat.history[0].content.substring(0, 30) + "..."
+          //           : "Empty chat"}
+          //       </Button>
+          //     ))
+          //   ) : (
+          //     <p className="text-gray-400 text-center text-sm">
+          //       No chat history available
+          //     </p>
+          //   )}
+          // </>
+          <p className="text-gray-400 text-center text-sm">
+            No chat history available
+          </p>
         ) : (
           <p className="text-gray-400 text-center text-sm">
             Please log in to see your chats.
@@ -244,15 +497,19 @@ export default function AskBoschChatbot() {
         )}
       </nav>
       <div className="mt-auto pt-4 border-t border-[#444444] space-y-2">
-        <Button variant="outline" className="w-full justify-start text-white">
-          <Settings className="mr-2 h-5 w-5" />
-          Settings
-        </Button>
-        <Button variant="outline" className="w-full justify-start text-white">
+        <Button
+          variant="outline"
+          className="w-full justify-start text-white"
+          onClick={() => setIsHelpDialogOpen(true)}
+        >
           <HelpCircle className="mr-2 h-5 w-5" />
           Help
         </Button>
-        <Button variant="outline" className="w-full justify-start text-white">
+        <Button
+          variant="outline"
+          className="w-full justify-start text-white"
+          onClick={() => setIsUsageGuidelinesDialogOpen(true)}
+        >
           <FileText className="mr-2 h-5 w-5" />
           Usage guidelines
         </Button>
@@ -370,7 +627,15 @@ export default function AskBoschChatbot() {
             Bosch VTA Chatbot
           </h1>
           <Button
-            onClick={() => setIsLoggedIn(!isLoggedIn)}
+            onClick={() => {
+              if (isLoggedIn) {
+                localStorage.removeItem("sessionId");
+                setIsLoggedIn(false);
+                setSessionId(null);
+              } else {
+                setIsLoginDialogOpen(true);
+              }
+            }}
             className="bg-[#007BC0] hover:bg-[#005691] text-white"
           >
             {isLoggedIn ? "Logout" : "Login"}
@@ -427,6 +692,97 @@ export default function AskBoschChatbot() {
         </div>
       </main>
       <AnimatePresence>{isRecording && <RecordingAnimation />}</AnimatePresence>
+      <LoginDialog
+        isOpen={isLoginDialogOpen}
+        onClose={() => setIsLoginDialogOpen(false)}
+        onLogin={handleLogin}
+        onRegister={handleRegister}
+      />
+      <Dialog open={isHelpDialogOpen} onOpenChange={setIsHelpDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Help</DialogTitle>
+            <DialogDescription>
+              Here you can find information on how to use the Bosch VTA Chatbot
+              effectively.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4">
+            <h3 className="text-lg font-semibold mb-2">Getting Started</h3>
+            <ul className="list-disc list-inside space-y-2">
+              <li>
+                Type your question in the input field at the bottom of the chat.
+              </li>
+              <li>
+                Click the send button or press Enter to submit your question.
+              </li>
+              <li>
+                Use the microphone button to ask questions via voice input.
+              </li>
+              <li>Browse your chat history in the sidebar (login required).</li>
+            </ul>
+            <h3 className="text-lg font-semibold mt-4 mb-2">Tips</h3>
+            <ul className="list-disc list-inside space-y-2">
+              <li>Be specific in your questions for more accurate answers.</li>
+              <li>
+                You can ask follow-up questions to get more detailed
+                information.
+              </li>
+              <li>
+                Use the 'New chat' button in the sidebar to start a fresh
+                conversation.
+              </li>
+            </ul>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={isUsageGuidelinesDialogOpen}
+        onOpenChange={setIsUsageGuidelinesDialogOpen}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Usage Guidelines</DialogTitle>
+            <DialogDescription>
+              Please follow these guidelines when using the Bosch VTA Chatbot.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4">
+            <h3 className="text-lg font-semibold mb-2">Do's</h3>
+            <ul className="list-disc list-inside space-y-2">
+              <li>
+                Ask questions related to Bosch products, services, and
+                technologies.
+              </li>
+              <li>
+                Provide context to your questions for more accurate answers.
+              </li>
+              <li>
+                Report any issues or bugs you encounter while using the chatbot.
+              </li>
+            </ul>
+            <h3 className="text-lg font-semibold mt-4 mb-2">Don'ts</h3>
+            <ul className="list-disc list-inside space-y-2">
+              <li>
+                Do not share personal or sensitive information in your queries.
+              </li>
+              <li>
+                Avoid using offensive language or asking inappropriate
+                questions.
+              </li>
+              <li>
+                Do not rely on the chatbot for critical decision-making without
+                verification.
+              </li>
+            </ul>
+            <p className="mt-4">
+              Remember, the Bosch VTA Chatbot is an AI assistant and may not
+              always provide perfect answers. For critical information, please
+              consult official Bosch documentation or contact customer support.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
