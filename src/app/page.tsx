@@ -20,6 +20,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import ReactMarkdown from "react-markdown";
 import { LoginDialog } from "@/components/login-dialog";
+import { Suspense } from 'react';
+import Link from 'next/link';
+import DocumentList from '@/components/DocumentList';
+import DocumentUpload from '@/components/DocumentUpload';
+import LogoutButton from '@/components/LogoutButton';
 import {
   Dialog,
   DialogContent,
@@ -58,7 +63,7 @@ export default function AskBoschChatbot() {
   const [isHelpDialogOpen, setIsHelpDialogOpen] = useState(false);
   const [isUsageGuidelinesDialogOpen, setIsUsageGuidelinesDialogOpen] =
     useState(false);
-
+  const [userRole, setUserRole] = useState<string | null>(null);
   useEffect(() => {
     if (scrollAreaRef.current) {
       scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
@@ -100,7 +105,7 @@ export default function AskBoschChatbot() {
       }
 
       localStorage.setItem("sessionId", data.session_id);
-
+      setUserRole(data.role);
       setIsLoggedIn(true);
       setSessionId(data.session_id);
 
@@ -611,178 +616,229 @@ export default function AskBoschChatbot() {
       </AnimatePresence>
     </ScrollArea>
   );
-
-  return (
-    <div className="flex h-screen bg-[#F2F2F2] text-[#333333] relative">
-      {renderSidebar()}
-      {isSidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
-      <main className="flex-1 flex flex-col">
-        <header className="flex justify-between items-center p-4 bg-white border-b border-gray-200 relative">
-          <h1 className="text-2xl font-bold text-[#007BC0]">
-            Bosch VTA Chatbot
-          </h1>
-          <Button
-            onClick={() => {
-              if (isLoggedIn) {
-                localStorage.removeItem("sessionId");
-                setIsLoggedIn(false);
-                setSessionId(null);
-              } else {
-                setIsLoginDialogOpen(true);
-              }
-            }}
-            className="bg-[#007BC0] hover:bg-[#005691] text-white"
-          >
-            {isLoggedIn ? "Logout" : "Login"}
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            className="md:hidden"
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          >
-            {isSidebarOpen ? (
-              <XIcon className="h-6 w-6" />
-            ) : (
-              <MenuIcon className="h-6 w-6" />
-            )}
-          </Button>
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 via-blue-500 to-green-500"></div>
-        </header>
-        <div className="flex-grow flex flex-col p-4 overflow-hidden">
-          {renderChatArea()}
-          <form onSubmit={handleSubmit} className="flex gap-2">
-            <Input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask about Bosch products, services, or technologies..."
-              className="flex-grow bg-white border-gray-300 text-[#333333] placeholder-gray-400"
-            />
-            <Button
-              type="button"
-              onClick={isRecording ? stopRecording : startRecording}
-              className={`bg-[#007BC0] hover:bg-[#005691] text-white ${
-                isRecording ? "animate-pulse" : ""
-              }`}
+  // Add Admin Dashboard component
+  const AdminDashboard = () => (
+    <div className="min-h-screen bg-gray-100">
+      <header className="bg-white shadow">
+        <div className="container mx-auto px-4 py-6 flex justify-between items-center">
+          <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+          <div className="flex items-center space-x-4">
+            <Button 
+              variant="outline" 
+              onClick={() => setUserRole('chat')}
             >
-              <MicIcon className="w-5 h-5" />
-              <span className="sr-only">
-                {isRecording ? "Stop Recording" : "Start Recording"}
-              </span>
+              Go to Chat
             </Button>
-            <Button
-              type="submit"
-              disabled={isLoading}
-              className="bg-[#007BC0] hover:bg-[#005691] text-white"
-            >
-              {isLoading ? (
-                <Loader2Icon className="w-5 h-5 animate-spin" />
-              ) : (
-                <SendHorizontalIcon className="w-5 h-5" />
-              )}
-              <span className="sr-only">Send</span>
-            </Button>
-          </form>
+            <LogoutButton />
+          </div>
+        </div>
+      </header>
+      <main className="container mx-auto px-4 py-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="bg-white shadow rounded-lg p-6">
+            <h2 className="text-2xl font-semibold mb-4">Documents</h2>
+            <Suspense fallback={<div>Loading documents...</div>}>
+              <DocumentList />
+            </Suspense>
+          </div>
+          <div className="bg-white shadow rounded-lg p-6">
+            <h2 className="text-2xl font-semibold mb-4">Upload Document</h2>
+            <DocumentUpload />
+          </div>
         </div>
       </main>
-      <AnimatePresence>{isRecording && <RecordingAnimation />}</AnimatePresence>
-      <LoginDialog
-        isOpen={isLoginDialogOpen}
-        onClose={() => setIsLoginDialogOpen(false)}
-        onLogin={handleLogin}
-        onRegister={handleRegister}
-      />
-      <Dialog open={isHelpDialogOpen} onOpenChange={setIsHelpDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Help</DialogTitle>
-            <DialogDescription>
-              Here you can find information on how to use the Bosch VTA Chatbot
-              effectively.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="mt-4">
-            <h3 className="text-lg font-semibold mb-2">Getting Started</h3>
-            <ul className="list-disc list-inside space-y-2">
-              <li>
-                Type your question in the input field at the bottom of the chat.
-              </li>
-              <li>
-                Click the send button or press Enter to submit your question.
-              </li>
-              <li>
-                Use the microphone button to ask questions via voice input.
-              </li>
-              <li>Browse your chat history in the sidebar (login required).</li>
-            </ul>
-            <h3 className="text-lg font-semibold mt-4 mb-2">Tips</h3>
-            <ul className="list-disc list-inside space-y-2">
-              <li>Be specific in your questions for more accurate answers.</li>
-              <li>
-                You can ask follow-up questions to get more detailed
-                information.
-              </li>
-              <li>
-                Use the &apos;New chat&apos; button in the sidebar to start a fresh
-                conversation.
-              </li>
-            </ul>
-          </div>
-        </DialogContent>
-      </Dialog>
-      <Dialog
-        open={isUsageGuidelinesDialogOpen}
-        onOpenChange={setIsUsageGuidelinesDialogOpen}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Usage Guidelines</DialogTitle>
-            <DialogDescription>
-              Please follow these guidelines when using the Bosch VTA Chatbot.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="mt-4">
-            <h3 className="text-lg font-semibold mb-2">Do&apos;s</h3>
-            <ul className="list-disc list-inside space-y-2">
-              <li>
-                Ask questions related to Bosch products, services, and
-                technologies.
-              </li>
-              <li>
-                Provide context to your questions for more accurate answers.
-              </li>
-              <li>
-                Report any issues or bugs you encounter while using the chatbot.
-              </li>
-            </ul>
-            <h3 className="text-lg font-semibold mt-4 mb-2">Don&apos;ts</h3>
-            <ul className="list-disc list-inside space-y-2">
-              <li>
-                Do not share personal or sensitive information in your queries.
-              </li>
-              <li>
-                Avoid using offensive language or asking inappropriate
-                questions.
-              </li>
-              <li>
-                Do not rely on the chatbot for critical decision-making without
-                verification.
-              </li>
-            </ul>
-            <p className="mt-4">
-              Remember, the Bosch VTA Chatbot is an AI assistant and may not
-              always provide perfect answers. For critical information, please
-              consult official Bosch documentation or contact customer support.
-            </p>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
+  );
+
+  return (
+    <>
+      {userRole === 'admin' ? (
+        <div className="flex h-screen bg-[#F2F2F2] text-[#333333] relative">
+          {/* Admin interface can be added here */}
+          <div>Admin Dashboard Content</div>
+        </div>
+      ) : (
+        <div className="flex h-screen bg-[#F2F2F2] text-[#333333] relative">
+          {renderSidebar()}
+          {isSidebarOpen && (
+            <div
+              className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+              onClick={() => setIsSidebarOpen(false)}
+            />
+          )}
+          <main className="flex-1 flex flex-col">
+            <header className="flex justify-between items-center p-4 bg-white border-b border-gray-200 relative">
+              <h1 className="text-2xl font-bold text-[#007BC0]">
+                Bosch VTA Chatbot
+              </h1>
+              {userRole === 'admin' && (
+                <Button
+                  onClick={() => setUserRole('admin')}
+                  className="mr-2 bg-[#007BC0] hover:bg-[#005691] text-white"
+                >
+                  Admin Dashboard
+                </Button>
+              )}
+              <Button
+                onClick={() => {
+                  if (isLoggedIn) {
+                    localStorage.removeItem("sessionId");
+                    setIsLoggedIn(false);
+                    setSessionId(null);
+                    setUserRole(null);
+                  } else {
+                    setIsLoginDialogOpen(true);
+                  }
+                }}
+                className="bg-[#007BC0] hover:bg-[#005691] text-white"
+              >
+                {isLoggedIn ? "Logout" : "Login"}
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="md:hidden"
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              >
+                {isSidebarOpen ? (
+                  <XIcon className="h-6 w-6" />
+                ) : (
+                  <MenuIcon className="h-6 w-6" />
+                )}
+              </Button>
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 via-blue-500 to-green-500"></div>
+            </header>
+            <div className="flex-grow flex flex-col p-4 overflow-hidden">
+              {renderChatArea()}
+              <form onSubmit={handleSubmit} className="flex gap-2">
+                <Input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Ask about Bosch products, services, or technologies..."
+                  className="flex-grow bg-white border-gray-300 text-[#333333] placeholder-gray-400"
+                />
+                <Button
+                  type="button"
+                  onClick={isRecording ? stopRecording : startRecording}
+                  className={`bg-[#007BC0] hover:bg-[#005691] text-white ${
+                    isRecording ? "animate-pulse" : ""
+                  }`}
+                >
+                  <MicIcon className="w-5 h-5" />
+                  <span className="sr-only">
+                    {isRecording ? "Stop Recording" : "Start Recording"}
+                  </span>
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isLoading}
+                  className="bg-[#007BC0] hover:bg-[#005691] text-white"
+                >
+                  {isLoading ? (
+                    <Loader2Icon className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <SendHorizontalIcon className="w-5 h-5" />
+                  )}
+                  <span className="sr-only">Send</span>
+                </Button>
+              </form>
+            </div>
+          </main>
+          <AnimatePresence>{isRecording && <RecordingAnimation />}</AnimatePresence>
+          <LoginDialog
+            isOpen={isLoginDialogOpen}
+            onClose={() => setIsLoginDialogOpen(false)}
+            onLogin={handleLogin}
+            onRegister={handleRegister}
+          />
+          <Dialog open={isHelpDialogOpen} onOpenChange={setIsHelpDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Help</DialogTitle>
+                <DialogDescription>
+                  Here you can find information on how to use the Bosch VTA Chatbot
+                  effectively.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="mt-4">
+                <h3 className="text-lg font-semibold mb-2">Getting Started</h3>
+                <ul className="list-disc list-inside space-y-2">
+                  <li>
+                    Type your question in the input field at the bottom of the chat.
+                  </li>
+                  <li>
+                    Click the send button or press Enter to submit your question.
+                  </li>
+                  <li>
+                    Use the microphone button to ask questions via voice input.
+                  </li>
+                  <li>Browse your chat history in the sidebar (login required).</li>
+                </ul>
+                <h3 className="text-lg font-semibold mt-4 mb-2">Tips</h3>
+                <ul className="list-disc list-inside space-y-2">
+                  <li>Be specific in your questions for more accurate answers.</li>
+                  <li>
+                    You can ask follow-up questions to get more detailed
+                    information.
+                  </li>
+                  <li>
+                    Use the &apos;New chat&apos; button in the sidebar to start a fresh
+                    conversation.
+                  </li>
+                </ul>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Dialog
+            open={isUsageGuidelinesDialogOpen}
+            onOpenChange={setIsUsageGuidelinesDialogOpen}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Usage Guidelines</DialogTitle>
+                <DialogDescription>
+                  Please follow these guidelines when using the Bosch VTA Chatbot.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="mt-4">
+                <h3 className="text-lg font-semibold mb-2">Do&apos;s</h3>
+                <ul className="list-disc list-inside space-y-2">
+                  <li>
+                    Ask questions related to Bosch products, services, and
+                    technologies.
+                  </li>
+                  <li>
+                    Provide context to your questions for more accurate answers.
+                  </li>
+                  <li>
+                    Report any issues or bugs you encounter while using the chatbot.
+                  </li>
+                </ul>
+                <h3 className="text-lg font-semibold mt-4 mb-2">Don&apos;ts</h3>
+                <ul className="list-disc list-inside space-y-2">
+                  <li>
+                    Do not share personal or sensitive information in your queries.
+                  </li>
+                  <li>
+                    Avoid using offensive language or asking inappropriate
+                    questions.
+                  </li>
+                  <li>
+                    Do not rely on the chatbot for critical decision-making without
+                    verification.
+                  </li>
+                </ul>
+                <p className="mt-4">
+                  Remember, the Bosch VTA Chatbot is an AI assistant and may not
+                  always provide perfect answers. For critical information, please
+                  consult official Bosch documentation or contact customer support.
+                </p>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+      )}
+    </>
   );
 }

@@ -42,10 +42,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Include role in JWT payload
     const token = jwt.sign(
       {
         userId: user._id,
         sessionId: user.session_id,
+        role: user.role, // Add role to JWT payload
       },
       process.env.JWT_SECRET!,
       {
@@ -57,6 +59,7 @@ export async function POST(request: NextRequest) {
       {
         token,
         session_id: user.session_id,
+        role: user.role, // Return role in response
       },
       { status: 200 }
     );
