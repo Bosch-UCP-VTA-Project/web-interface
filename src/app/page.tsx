@@ -81,6 +81,40 @@ export default function AskBoschChatbot() {
     }
   }, [isLoggedIn, sessionId]);
 
+  const saveChat = async (
+    query: string,
+    response: string,
+    sessionId: string
+  ) => {
+    try {
+      const res = await fetch("/api/chats", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionId}`,
+        },
+        body: JSON.stringify({
+          query,
+          response,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to save chat: ${res.statusText}`);
+      }
+
+      return await res.json();
+    } catch (error) {
+      console.error("Error saving chat:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save chat history",
+        variant: "destructive",
+      });
+      throw error;
+    }
+  };
+
   const handleLogin = async (email: string, password: string) => {
     try {
       const response = await fetch("/api/login", {
@@ -119,11 +153,14 @@ export default function AskBoschChatbot() {
     if (!sessionId) return;
 
     try {
-      const response = await fetch("https://agenticbosch.onrender.com/history", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: sessionId }),
-      });
+      const response = await fetch(
+        "https://agenticbosch.onrender.com/history",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId }),
+        }
+      );
 
       if (!response.ok) {
         throw new Error("Failed to fetch history");
@@ -172,6 +209,56 @@ export default function AskBoschChatbot() {
     }
   };
 
+  // const handleSubmit = async (e: React.FormEvent) => {
+  //   e.preventDefault();
+  //   if (!input.trim()) return;
+
+  //   if (!isLoggedIn || !sessionId) {
+  //     toast({
+  //       title: "Log In",
+  //       description: "Please log in or register to use the chatbot.",
+  //       variant: "destructive",
+  //     });
+  //     return;
+  //   }
+
+  //   const userMessage: Message = { type: "user", content: input };
+  //   setMessages((prev) => [...prev, userMessage]);
+  //   setInput("");
+  //   setIsLoading(true);
+  //   setLoadingMessage("The agent is thinking...");
+
+  //   try {
+  //     const response = await fetch("https://agenticbosch.onrender.com/query", {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify({ query: input, session_id: sessionId }),
+  //     });
+
+  //     if (!response.ok) {
+  //       throw new Error("Failed to get response");
+  //     }
+
+  //     const data = await response.json();
+  //     const assistantMessage: Message = {
+  //       type: "assistant",
+  //       content: data.answer,
+  //     };
+  //     setMessages((prev) => [...prev, assistantMessage]);
+  //   } catch (error) {
+  //     console.error("Error:", error);
+  //     const errorMessage: Message = {
+  //       type: "assistant",
+  //       content: "Sorry, I encountered an error while processing your request.",
+  //     };
+  //     setMessages((prev) => [...prev, errorMessage]);
+  //   } finally {
+  //     setIsLoading(false);
+  //     setLoadingMessage("");
+  //   }
+  // };
+
+  // Update handleSubmit to include saving chats
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
@@ -208,6 +295,9 @@ export default function AskBoschChatbot() {
         content: data.answer,
       };
       setMessages((prev) => [...prev, assistantMessage]);
+
+      // Save chat after successful response
+      await saveChat(input, data.answer, sessionId);
     } catch (error) {
       console.error("Error:", error);
       const errorMessage: Message = {
@@ -353,101 +443,6 @@ export default function AskBoschChatbot() {
     </motion.div>
   );
 
-  // const renderSidebar = () => (
-  //   <aside
-  //     className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#333333] text-white p-4 transform transition-transform duration-300 ease-in-out ${
-  //       isSidebarOpen ? "translate-x-0" : "-translate-x-full"
-  //     } md:relative md:translate-x-0`}
-  //   >
-  //     <Button
-  //       variant="outline"
-  //       className="w-full justify-start mb-4 text-white"
-  //       onClick={() => setMessages([])}
-  //     >
-  //       <PlusCircle className="mr-2 h-5 w-5" />
-  //       New chat
-  //     </Button>
-  //     {/* <nav className="space-y-2">
-  //       {isLoggedIn ? (
-  //         <>
-  //           {chatHistory.length > 0 ? (
-  //             chatHistory.map((chat, index) => (
-  //               <Button
-  //                 key={index}
-  //                 variant="outline"
-  //                 className="w-full text-white text-wrap p-1"
-  //                 onClick={() => {
-  //                   setMessages(chat.history);
-  //                   setIsSidebarOpen(false);
-  //                 }}
-  //               >
-  //                 {chat.history[0]?.content.substring(0, 30)}...
-  //               </Button>
-  //             ))
-  //           ) : (
-  //             <p className="text-gray-400 text-center text-sm">
-  //               No chat history available
-  //             </p>
-  //           )}
-  //         </>
-  //       ) : (
-  //         <p className="text-gray-400 text-center text-sm">
-  //           Please log in to see your chats.
-  //         </p>
-  //       )}
-  //     </nav> */}
-  //     <nav className="space-y-2">
-  //       {isLoggedIn ? (
-  //         <>
-  //           {chatHistory.length > 0 ? (
-  //             chatHistory.map((chat, index) => (
-  //               <Button
-  //                 key={index}
-  //                 variant="outline"
-  //                 className="w-full text-white text-wrap p-1"
-  //                 onClick={() => {
-  //                   setMessages(chat.history);
-  //                   setIsSidebarOpen(false);
-  //                 }}
-  //               >
-  //                 {chat.history && chat.history[0]
-  //                   ? chat.history[0].content.substring(0, 30) + "..."
-  //                   : "Empty chat"}
-  //               </Button>
-  //             ))
-  //           ) : (
-  //             <p className="text-gray-400 text-center text-sm">
-  //               No chat history available
-  //             </p>
-  //           )}
-  //         </>
-  //       ) : (
-  //         <p className="text-gray-400 text-center text-sm">
-  //           Please log in to see your chats.
-  //         </p>
-  //       )}
-  //     </nav>
-  //     <div className="mt-auto pt-4 border-t border-[#444444] space-y-2">
-  //       <Button
-  //         variant="outline"
-  //         className="w-full justify-start text-white"
-  //         onClick={() => setIsHelpDialogOpen(true)}
-  //       >
-  //         <HelpCircle className="mr-2 h-5 w-5" />
-  //         Help
-  //       </Button>
-  //       <Button
-  //         variant="outline"
-  //         className="w-full justify-start text-white"
-  //         onClick={() => setIsUsageGuidelinesDialogOpen(true)}
-  //       >
-  //         <FileText className="mr-2 h-5 w-5" />
-  //         Usage guidelines
-  //       </Button>
-  //     </div>
-  //   </aside>
-  // );
-
   const renderSidebar = () => (
     <aside
       className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#333333] text-white p-4 transform transition-transform duration-300 ease-in-out ${
@@ -464,29 +459,6 @@ export default function AskBoschChatbot() {
       </Button>
       <nav className="space-y-2">
         {isLoggedIn ? (
-          // <>
-          //   {chatHistory && chatHistory.length > 0 ? (
-          //     chatHistory.map((chat, index) => (
-          //       <Button
-          //         key={index}
-          //         variant="outline"
-          //         className="w-full text-white text-wrap p-1"
-          //         onClick={() => {
-          //           setMessages(chat.history);
-          //           setIsSidebarOpen(false);
-          //         }}
-          //       >
-          //         {chat.history && chat.history.length > 0
-          //           ? chat.history[0].content.substring(0, 30) + "..."
-          //           : "Empty chat"}
-          //       </Button>
-          //     ))
-          //   ) : (
-          //     <p className="text-gray-400 text-center text-sm">
-          //       No chat history available
-          //     </p>
-          //   )}
-          // </>
           <p className="text-gray-400 text-center text-sm">
             No chat history available
           </p>
@@ -729,8 +701,8 @@ export default function AskBoschChatbot() {
                 information.
               </li>
               <li>
-                Use the &apos;New chat&apos; button in the sidebar to start a fresh
-                conversation.
+                Use the &apos;New chat&apos; button in the sidebar to start a
+                fresh conversation.
               </li>
             </ul>
           </div>
