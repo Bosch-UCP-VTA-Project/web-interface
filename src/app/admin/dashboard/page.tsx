@@ -31,7 +31,11 @@ export default function Dashboard() {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await fetch(`${process.env.SERVER_URL}/list_manuals`);
+      const response = await fetch(`${process.env.SERVER_URL}/documents/list`, {
+        headers: {
+          "Authorization": `Bearer ${localStorage.getItem("adminAuthenticated")}`
+        }
+      });
 
       if (!response.ok) {
         throw new Error("Failed to fetch files");
@@ -69,8 +73,11 @@ export default function Dashboard() {
     formData.append("file", file);
 
     try {
-      const response = await fetch(`${process.env.SERVER_URL}/upload_pdf`, {
+      const response = await fetch(`${process.env.SERVER_URL}/documents/upload`, {
         method: "POST",
+        headers: {
+          "Authorization": `Bearer ${localStorage.getItem("adminAuthenticated")}`
+        },
         body: formData,
       });
 

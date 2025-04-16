@@ -15,6 +15,8 @@ import {
   FileText,
   PlusCircle,
   XIcon,
+  ExternalLinkIcon,
+  InfoIcon,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
@@ -28,10 +30,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+interface SourceNode {
+  text: string;
+  score: string;
+}
+
 interface Message {
   type: "user" | "assistant";
   content: string;
   transcription?: string;
+  source_nodes?: SourceNode[];
 }
 
 interface ChatHistory {
@@ -40,6 +48,55 @@ interface ChatHistory {
     content: string;
   }[];
 }
+
+interface ChatSession {
+  id: string;
+  title: string;
+  created_at: string;
+}
+
+const SourceDialog = ({
+  isOpen,
+  onClose,
+  sourceNodes,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  sourceNodes: SourceNode[];
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={() => onClose()}>
+      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Source Information</DialogTitle>
+          <DialogDescription>
+            The following sources were used to generate the response:
+          </DialogDescription>
+        </DialogHeader>
+        <div className="mt-4 space-y-4">
+          {sourceNodes.map((source, index) => (
+            <div
+              key={index}
+              className="p-4 bg-gray-50 rounded-lg border border-gray-200"
+            >
+              <div className="flex justify-between items-start mb-2">
+                <h4 className="font-semibold text-[#007BC0]">
+                  Source #{index + 1}
+                </h4>
+                <div className="text-xs text-gray-500">
+                  Relevance Score: {parseFloat(source.score).toFixed(2)}
+                </div>
+              </div>
+              <div className="text-sm whitespace-pre-wrap">{source.text}</div>
+            </div>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 export default function AskBoschChatbot() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -58,6 +115,12 @@ export default function AskBoschChatbot() {
   const [isHelpDialogOpen, setIsHelpDialogOpen] = useState(false);
   const [isUsageGuidelinesDialogOpen, setIsUsageGuidelinesDialogOpen] =
     useState(false);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [isSourceDialogOpen, setIsSourceDialogOpen] = useState(false);
+  const [currentSourceNodes, setCurrentSourceNodes] = useState<SourceNode[]>(
+    []
+  );
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -76,51 +139,24 @@ export default function AskBoschChatbot() {
   useEffect(() => {
     if (isLoggedIn && sessionId) {
       fetchHistory();
+      fetchUserSessions();
     } else {
       setChatHistory([]);
     }
   }, [isLoggedIn, sessionId]);
 
-  const saveChat = async (
-    query: string,
-    response: string,
-    sessionId: string
-  ) => {
-    try {
-      const res = await fetch("/api/chats", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${sessionId}`,
-        },
-        body: JSON.stringify({
-          query,
-          response,
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error(`Failed to save chat: ${res.statusText}`);
-      }
-
-      return await res.json();
-    } catch (error) {
-      console.error("Error saving chat:", error);
-      toast({
-        title: "Error",
-        description: "Failed to save chat history",
-        variant: "destructive",
-      });
-      throw error;
-    }
-  };
-
   const handleLogin = async (email: string, password: string) => {
     try {
-      const response = await fetch("/api/login", {
+      const formData = new URLSearchParams();
+      formData.append("username", email);
+      formData.append("password", password);
+
+      const response = await fetch(`${process.env.SERVER_URL}/auth/token`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: formData,
       });
 
       if (!response.ok) {
@@ -129,14 +165,15 @@ export default function AskBoschChatbot() {
 
       const data = await response.json();
 
-      if (!data.session_id) {
-        throw new Error("No session ID received");
+      if (!data.access_token) {
+        throw new Error("No access token received");
       }
 
-      localStorage.setItem("sessionId", data.session_id);
+      localStorage.setItem("sessionId", data.access_token);
 
       setIsLoggedIn(true);
-      setSessionId(data.session_id);
+      setSessionId(data.access_token);
+      await fetchUserSessions();
 
       toast({
         title: "Success",
@@ -153,14 +190,14 @@ export default function AskBoschChatbot() {
     if (!sessionId) return;
 
     try {
-      const response = await fetch(
-        "https://agenticbosch.onrender.com/history",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ session_id: sessionId }),
-        }
-      );
+      const response = await fetch(`${process.env.SERVER_URL}/chat/history`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionId}`,
+        },
+        body: JSON.stringify({ session_id: sessionId }),
+      });
 
       if (!response.ok) {
         throw new Error("Failed to fetch history");
@@ -179,86 +216,134 @@ export default function AskBoschChatbot() {
     }
   };
 
+  const fetchUserSessions = async () => {
+    if (!isLoggedIn || !sessionId) return;
+
+    try {
+      const response = await fetch(`${process.env.SERVER_URL}/chat/sessions`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${sessionId}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch sessions");
+      }
+
+      const data = await response.json();
+      setSessions(data.sessions);
+    } catch (error) {
+      console.error("Error fetching sessions:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load chat sessions",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const loadChatSession = async (chatId: string) => {
+    setActiveChatId(chatId);
+    setIsLoading(true);
+
+    try {
+      const response = await fetch(`${process.env.SERVER_URL}/chat/history`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionId}`,
+        },
+        body: JSON.stringify({ session_id: chatId }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to load chat");
+      }
+
+      const data = await response.json();
+
+      const loadedMessages = data.history.map((msg: any) => ({
+        type: msg.role === "user" ? "user" : "assistant",
+        content: msg.content,
+      }));
+
+      setMessages(loadedMessages);
+    } catch (error) {
+      console.error("Error loading chat:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load chat history",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const startNewChat = async () => {
+    try {
+      const response = await fetch(
+        `${process.env.SERVER_URL}/chat/new-session`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${sessionId}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to create new session");
+      }
+
+      const data = await response.json();
+      setActiveChatId(data.session_id);
+      setMessages([]);
+
+      fetchUserSessions();
+    } catch (error) {
+      console.error("Error creating new session:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create new chat",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleRegister = async (email: string, password: string) => {
     try {
-      const response = await fetch("/api/register", {
+      const response = await fetch(`${process.env.SERVER_URL}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          username: email,
+          email: email,
+          password: password,
+          role: "user",
+        }),
       });
 
       if (!response.ok) {
         throw new Error("Registration failed");
       }
 
-      const data = await response.json();
+      const userData = await response.json();
 
-      setIsLoggedIn(true);
-      setSessionId(data.session_id);
-      localStorage.setItem("sessionId", data.session_id);
+      await handleLogin(email, password);
 
       toast({
         title: "Success",
         description: "You have successfully registered and logged in.",
         variant: "custom",
       });
-      console.log("Registered and logged in:", data);
     } catch (error) {
       console.error("Registration error:", error);
       throw error;
     }
   };
 
-  // const handleSubmit = async (e: React.FormEvent) => {
-  //   e.preventDefault();
-  //   if (!input.trim()) return;
-
-  //   if (!isLoggedIn || !sessionId) {
-  //     toast({
-  //       title: "Log In",
-  //       description: "Please log in or register to use the chatbot.",
-  //       variant: "destructive",
-  //     });
-  //     return;
-  //   }
-
-  //   const userMessage: Message = { type: "user", content: input };
-  //   setMessages((prev) => [...prev, userMessage]);
-  //   setInput("");
-  //   setIsLoading(true);
-  //   setLoadingMessage("The agent is thinking...");
-
-  //   try {
-  //     const response = await fetch("https://agenticbosch.onrender.com/query", {
-  //       method: "POST",
-  //       headers: { "Content-Type": "application/json" },
-  //       body: JSON.stringify({ query: input, session_id: sessionId }),
-  //     });
-
-  //     if (!response.ok) {
-  //       throw new Error("Failed to get response");
-  //     }
-
-  //     const data = await response.json();
-  //     const assistantMessage: Message = {
-  //       type: "assistant",
-  //       content: data.answer,
-  //     };
-  //     setMessages((prev) => [...prev, assistantMessage]);
-  //   } catch (error) {
-  //     console.error("Error:", error);
-  //     const errorMessage: Message = {
-  //       type: "assistant",
-  //       content: "Sorry, I encountered an error while processing your request.",
-  //     };
-  //     setMessages((prev) => [...prev, errorMessage]);
-  //   } finally {
-  //     setIsLoading(false);
-  //     setLoadingMessage("");
-  //   }
-  // };
-
-  // Update handleSubmit to include saving chats
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
@@ -272,6 +357,10 @@ export default function AskBoschChatbot() {
       return;
     }
 
+    if (!activeChatId) {
+      await startNewChat();
+    }
+
     const userMessage: Message = { type: "user", content: input };
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
@@ -279,10 +368,13 @@ export default function AskBoschChatbot() {
     setLoadingMessage("The agent is thinking...");
 
     try {
-      const response = await fetch("https://agenticbosch.onrender.com/query", {
+      const response = await fetch(`${process.env.SERVER_URL}/chat/query`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: input, session_id: sessionId }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionId}`,
+        },
+        body: JSON.stringify({ query: input, session_id: activeChatId }),
       });
 
       if (!response.ok) {
@@ -293,11 +385,9 @@ export default function AskBoschChatbot() {
       const assistantMessage: Message = {
         type: "assistant",
         content: data.answer,
+        source_nodes: data.source_nodes,
       };
       setMessages((prev) => [...prev, assistantMessage]);
-
-      // Save chat after successful response
-      await saveChat(input, data.answer, sessionId);
     } catch (error) {
       console.error("Error:", error);
       const errorMessage: Message = {
@@ -363,8 +453,11 @@ export default function AskBoschChatbot() {
       formData.append("audio", audioBlob, "recording.wav");
       formData.append("session_id", sessionId!);
 
-      const response = await fetch("https://agenticbosch.onrender.com/audio", {
+      const response = await fetch(`${process.env.SERVER_URL}/chat/audio`, {
         method: "POST",
+        headers: {
+          Authorization: `Bearer ${sessionId}`,
+        },
         body: formData,
       });
 
@@ -378,6 +471,7 @@ export default function AskBoschChatbot() {
       const assistantMessage: Message = {
         type: "assistant",
         content: data.answer,
+        source_nodes: data.source_nodes,
       };
       setMessages((prev) => [...prev, userMessage, assistantMessage]);
     } catch (error) {
@@ -452,16 +546,31 @@ export default function AskBoschChatbot() {
       <Button
         variant="outline"
         className="w-full justify-start mb-4 text-white"
-        onClick={() => setMessages([])}
+        onClick={startNewChat}
       >
         <PlusCircle className="mr-2 h-5 w-5" />
         New chat
       </Button>
       <nav className="space-y-2">
         {isLoggedIn ? (
-          <p className="text-gray-400 text-center text-sm">
-            No chat history available
-          </p>
+          sessions.length > 0 ? (
+            <div className="space-y-1 max-h-[60vh] overflow-y-auto">
+              {sessions.map((session) => (
+                <Button
+                  key={session.id}
+                  variant={activeChatId === session.id ? "default" : "ghost"}
+                  className="w-full justify-start text-white overflow-hidden text-ellipsis text-left"
+                  onClick={() => loadChatSession(session.id)}
+                >
+                  <div className="truncate w-full">{session.title}</div>
+                </Button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-400 text-center text-sm">
+              No chat history available
+            </p>
+          )
         ) : (
           <p className="text-gray-400 text-center text-sm">
             Please log in to see your chats.
@@ -532,38 +641,68 @@ export default function AskBoschChatbot() {
                 {message.type === "user" ? (
                   message.content
                 ) : (
-                  <ReactMarkdown
-                    components={{
-                      p: ({ ...props }) => <p className="mb-2" {...props} />,
-                      h1: ({ ...props }) => (
-                        <h1 className="text-2xl font-bold mb-2" {...props} />
-                      ),
-                      h2: ({ ...props }) => (
-                        <h2 className="text-xl font-bold mb-2" {...props} />
-                      ),
-                      h3: ({ ...props }) => (
-                        <h3 className="text-lg font-bold mb-2" {...props} />
-                      ),
-                      ul: ({ ...props }) => (
-                        <ul className="list-disc list-inside mb-2" {...props} />
-                      ),
-                      ol: ({ ...props }) => (
-                        <ol
-                          className="list-decimal list-inside mb-2"
-                          {...props}
-                        />
-                      ),
-                      li: ({ ...props }) => <li className="mb-1" {...props} />,
-                      a: ({ ...props }) => (
-                        <a
-                          className="text-[#007BC0] hover:underline"
-                          {...props}
-                        />
-                      ),
-                    }}
-                  >
-                    {message.content}
-                  </ReactMarkdown>
+                  <div>
+                    <ReactMarkdown
+                      components={{
+                        p: ({ ...props }) => <p className="mb-2" {...props} />,
+                        h1: ({ ...props }) => (
+                          <h1 className="text-2xl font-bold mb-2" {...props} />
+                        ),
+                        h2: ({ ...props }) => (
+                          <h2 className="text-xl font-bold mb-2" {...props} />
+                        ),
+                        h3: ({ ...props }) => (
+                          <h3 className="text-lg font-bold mb-2" {...props} />
+                        ),
+                        ul: ({ ...props }) => (
+                          <ul
+                            className="list-disc list-inside mb-2"
+                            {...props}
+                          />
+                        ),
+                        ol: ({ ...props }) => (
+                          <ol
+                            className="list-decimal list-inside mb-2"
+                            {...props}
+                          />
+                        ),
+                        li: ({ ...props }) => (
+                          <li className="mb-1" {...props} />
+                        ),
+                        a: ({ href, children, ...props }) => (
+                          <a
+                            className="text-[#007BC0] hover:underline inline-flex items-center"
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            {...props}
+                          >
+                            {children}
+                            <ExternalLinkIcon className="w-3 h-3 ml-1" />
+                          </a>
+                        ),
+                      }}
+                    >
+                      {message.content}
+                    </ReactMarkdown>
+                    {message.source_nodes &&
+                      message.source_nodes.length > 0 && (
+                        <div className="mt-2 flex justify-end">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs flex items-center text-gray-500 hover:text-[#007BC0]"
+                            onClick={() => {
+                              setCurrentSourceNodes(message.source_nodes || []);
+                              setIsSourceDialogOpen(true);
+                            }}
+                          >
+                            <InfoIcon className="w-3 h-3 mr-1" />
+                            View Sources
+                          </Button>
+                        </div>
+                      )}
+                  </div>
                 )}
               </div>
             </div>
@@ -755,6 +894,11 @@ export default function AskBoschChatbot() {
           </div>
         </DialogContent>
       </Dialog>
+      <SourceDialog
+        isOpen={isSourceDialogOpen}
+        onClose={() => setIsSourceDialogOpen(false)}
+        sourceNodes={currentSourceNodes}
+      />
     </div>
   );
 }
