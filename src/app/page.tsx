@@ -55,6 +55,13 @@ interface ChatSession {
   created_at: string;
 }
 
+interface ChatMessageItem {
+  role: "user" | "assistant";
+  content: string;
+  timestamp?: string;
+  source_nodes?: SourceNode[];
+}
+
 const SourceDialog = ({
   isOpen,
   onClose,
@@ -263,9 +270,10 @@ export default function AskBoschChatbot() {
 
       const data = await response.json();
 
-      const loadedMessages = data.history.map((msg: any) => ({
+      const loadedMessages = data.history.map((msg: ChatMessageItem) => ({
         type: msg.role === "user" ? "user" : "assistant",
         content: msg.content,
+        ...(msg.source_nodes && { source_nodes: msg.source_nodes }),
       }));
 
       setMessages(loadedMessages);
