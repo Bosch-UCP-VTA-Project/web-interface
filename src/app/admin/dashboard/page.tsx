@@ -27,16 +27,22 @@ export default function Dashboard() {
     fetchFiles();
   }, []);
 
+  const getAuthHeader = (): HeadersInit => {
+    const token = localStorage.getItem("adminToken");
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
   const fetchFiles = async () => {
     try {
       setIsLoading(true);
       setError(null);
       const response = await fetch(`${process.env.SERVER_URL}/documents/list`, {
-        headers: {
-          "Authorization": `Bearer ${localStorage.getItem("adminAuthenticated")}`
-        }
+        headers: getAuthHeader(),
       });
 
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("Unauthorized or Forbidden");
+      }
       if (!response.ok) {
         throw new Error("Failed to fetch files");
       }
@@ -44,10 +50,12 @@ export default function Dashboard() {
       const data = await response.json();
       setFiles(Array.isArray(data.manuals) ? data.manuals : []);
     } catch (error) {
-      setError("Failed to fetch files");
+      const message =
+        error instanceof Error ? error.message : "Failed to fetch files";
+      setError(message);
       toast({
         title: "Error",
-        description: "Failed to fetch files. Please try again.",
+        description: `${message}. Please try again or re-login.`,
         variant: "destructive",
       });
     } finally {
@@ -73,16 +81,24 @@ export default function Dashboard() {
     formData.append("file", file);
 
     try {
-      const response = await fetch(`${process.env.SERVER_URL}/documents/upload`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${localStorage.getItem("adminAuthenticated")}`
-        },
-        body: formData,
-      });
+      const response = await fetch(
+        `${process.env.SERVER_URL}/documents/upload`,
+        {
+          method: "POST",
+          headers: {
+            ...getAuthHeader(),
+          },
+          body: formData,
+        }
+      );
 
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("Unauthorized or Forbidden");
+      }
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response
+          .json()
+          .catch(() => ({ detail: "Upload failed" }));
         throw new Error(errorData.detail || "Upload failed");
       }
 
@@ -91,21 +107,23 @@ export default function Dashboard() {
         file_name: data.file_name,
       };
 
-      setFiles((prevFiles) => [...prevFiles, newFile]);
+      fetchFiles();
 
       toast({
         title: "Success",
-        description: "File uploaded successfully to vector database.",
+        description: "File uploaded successfully and processing started.",
       });
     } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to upload file";
       toast({
         title: "Error",
-        description:
-          error instanceof Error ? error.message : "Failed to upload file",
+        description: `${message}. Please try again or re-login.`,
         variant: "destructive",
       });
     } finally {
       setIsUploading(false);
+      e.target.value = "";
     }
   };
 
@@ -116,7 +134,7 @@ export default function Dashboard() {
           <CardHeader>
             <CardTitle>Upload Document</CardTitle>
             <CardDescription>
-              Upload documents to the vector database for processing
+              Upload PDF technical manuals to the vector database
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -125,11 +143,13 @@ export default function Dashboard() {
                 variant="outline"
                 className="relative"
                 disabled={isUploading}
+                onClick={() => document.getElementById("fileInput")?.click()}
               >
                 <input
+                  id="fileInput"
                   type="file"
                   accept=".pdf"
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer sr-only"
                   onChange={handleFileUpload}
                   disabled={isUploading}
                 />
@@ -141,12 +161,12 @@ export default function Dashboard() {
                 ) : (
                   <>
                     <Upload className="w-4 h-4 mr-2" />
-                    Select File
+                    Select PDF File
                   </>
                 )}
               </Button>
               <p className="text-sm text-muted-foreground">
-                Supported formats: .pdf
+                Supported format: .pdf
               </p>
             </div>
           </CardContent>
@@ -158,8 +178,20 @@ export default function Dashboard() {
           <CardHeader>
             <CardTitle>Vector Database Files</CardTitle>
             <CardDescription>
-              View all documents stored in the vector database
+              View technical manuals stored in the vector database
             </CardDescription>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchFiles}
+              disabled={isLoading}
+              className="mt-2 w-fit"
+            >
+              {isLoading ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : null}
+              Refresh List
+            </Button>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -170,13 +202,14 @@ export default function Dashboard() {
                 </p>
               </div>
             ) : error ? (
-              <div className="text-center">
-                <div className="text-center py-6 text-destructive">{error}</div>
+              <div className="text-center py-6 text-destructive">
+                <p>{error}</p>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={fetchFiles}
-                  className="mt-2"
+                  className="mt-4"
+                  disabled={isLoading}
                 >
                   Retry
                 </Button>
@@ -186,16 +219,18 @@ export default function Dashboard() {
                 {files.map((file, index) => (
                   <div
                     key={index}
-                    className="flex items-center p-3 bg-slate-50 rounded-lg"
+                    className="flex items-center p-3 bg-slate-100 rounded-lg border border-slate-200"
                   >
-                    <File className="w-4 h-4 mr-2 text-primary" />
-                    <span className="flex-1 text-sm">{file.file_name}</span>
+                    <File className="w-4 h-4 mr-3 text-primary flex-shrink-0" />
+                    <span className="flex-1 text-sm truncate">
+                      {file.file_name}
+                    </span>
                   </div>
                 ))}
               </div>
             ) : (
               <div className="text-center py-6 text-muted-foreground">
-                No files have been uploaded yet
+                No technical manuals found in the vector database.
               </div>
             )}
           </CardContent>

@@ -28,16 +28,42 @@ export default function AdminLogin() {
     setIsLoading(true);
 
     try {
-      if (email === "admin@admin.com" && password === "admin") {
-        localStorage.setItem("adminAuthenticated", "true");
-        router.push("/admin/dashboard");
-      } else {
-        throw new Error("Invalid credentials");
+      // Call the backend admin login endpoint
+      const formData = new URLSearchParams();
+      formData.append("username", email); // FastAPI expects 'username'
+      formData.append("password", password);
+
+      const response = await fetch(`${process.env.SERVER_URL}/auth/admin/token`, { // Use NEXT_PUBLIC_ prefix for client-side env vars
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: "Authentication failed" }));
+        throw new Error(errorData.detail || "Invalid credentials or not an admin");
       }
+
+      const data = await response.json();
+
+      if (!data.access_token) {
+        throw new Error("No access token received");
+      }
+
+      // Store the token in localStorage
+      localStorage.setItem("adminToken", data.access_token); // Use a specific name like adminToken
+      router.push("/admin/dashboard");
+      toast({
+        title: "Login Successful",
+        description: "Redirecting to dashboard...",
+      });
+
     } catch (error) {
       toast({
         title: "Authentication Error",
-        description: "Invalid email or password. Please try again.",
+        description: error instanceof Error ? error.message : "An unknown error occurred.",
         variant: "destructive",
       });
     } finally {
@@ -49,6 +75,7 @@ export default function AdminLogin() {
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-slate-50 to-slate-100/50">
       <Card className="w-[400px] shadow-lg">
         <CardHeader className="space-y-1 text-center">
+          {/* ... existing CardHeader content ... */}
           <div className="flex justify-center mb-4">
             <div className="p-3 rounded-full bg-primary/10">
               <LockKeyhole className="w-6 h-6 text-primary" />
@@ -66,7 +93,7 @@ export default function AdminLogin() {
               <Input
                 id="email"
                 type="email"
-                placeholder="admin@example.com"
+                placeholder="admin@example.com" // Keep placeholder or update if needed
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required

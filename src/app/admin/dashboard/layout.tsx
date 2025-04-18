@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import Link from "next/link";
 import { LogOut } from "lucide-react";
 
 export default function DashboardLayout({
@@ -14,15 +13,19 @@ export default function DashboardLayout({
   const router = useRouter();
 
   useEffect(() => {
-    const isAuthenticated = localStorage.getItem("adminAuthenticated");
+    // Check for the admin token instead of the simple boolean flag
+    const isAuthenticated = localStorage.getItem("adminToken");
     if (!isAuthenticated) {
-      router.push("/");
+      // Redirect to admin login page if token is not found
+      router.push("/admin");
     }
+    // Optional: Add token validation logic here if needed (e.g., check expiry)
   }, [router]);
 
   const handleLogout = () => {
-    localStorage.removeItem("adminAuthenticated");
-    router.push("/admin");
+    // Remove the admin token on logout
+    localStorage.removeItem("adminToken");
+    router.push("/admin"); // Redirect to admin login page
   };
 
   return (
@@ -39,7 +42,7 @@ export default function DashboardLayout({
             <Button
               variant="ghost"
               className="text-red-500 hover:text-red-600 hover:bg-red-50"
-              onClick={handleLogout}
+              onClick={handleLogout} // Use updated logout handler
             >
               <LogOut className="mr-2 h-4 w-4" />
               Logout
